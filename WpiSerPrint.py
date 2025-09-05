@@ -43,7 +43,7 @@ wpThreshold = 3 #Distance from WP in meters.
 #Mavlink message queues.
 gpsQueue = queue.Queue(maxsize=1)
 navQueue = queue.Queue(maxsize=1)
-
+missionSeqQueue = queue.Queue(maxsize=1)
 #Serial line thread queues, not used in implementation.
 winchQueue = queue.Queue(maxsize=512)
 loggerQueue = queue.Queue(maxsize=512)
@@ -103,6 +103,8 @@ def mavlinkReader(connection):
             continue
         
         mType = msg.get_type()
+        if mType == "MISSION_CURRENT":
+            putLatest(missionSeqQueue,msg)
         if mType == "GPS_RAW_INT":
             putLatest(gpsQueue,msg)
         elif mType == "NAV_CONTROLLER_OUTPUT":
@@ -189,10 +191,9 @@ try: #Main function, which is basically the winch loop:
                 if "dock switch" in winchMsg:
                     outQueue.put("Dock switch confirmed.")
                     #Wait until the waypoint is updated to break out of loop to avoid second profile.
-                    while(wpDist<wpThreshold):
-                        print("Profile confirmed, waiting for next waypoint.")
-                        #Need to keep checking for distance here.
-                        wpDist = navQueue.get().wp_dist
+                    currentSeq = navQueue.get().seq
+                    while(currentSeq==navQueue.get().seq): #Spin until mission item is incremented. #TODO: what happens at last waypoint? increment?
+                        print(f"Docked, waiting for mission sequence #{seq} to finish loiter.",currentSeq)
                         time.sleep(5)
                     break
                     
