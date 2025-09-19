@@ -28,7 +28,7 @@ connectionList = [qgc,qgcZT]
 
 #Serial configurations.
 serSens = serial.Serial('/dev/ttyS0',115200,timeout=10)
-serWinch = serial.Serial('/dev/ttyAMA2',19200,timeout=0.2) # Serial port for the winch. Change this to the correct port.
+serWinch = serial.Serial('/dev/ttyAMA2',19200,timeout=10) # Serial port for the winch. Change this to the correct port.
 
 #Open the backup file for redundancy.
 day = datetime.now()
@@ -117,7 +117,7 @@ def GPSWrite():#Write GPS DATA to logger.
     
         messageString ="$"+str(time.time()) +"/"+ str(GPSData).replace(" ","")+"\n"
         serWrite(serSens,messageString)
-        outQueue.put(messageString)
+        #outQueue.put(messageString)
 
         #Send the sensor string messsage to QGC.
         try:
@@ -139,13 +139,13 @@ sendHeartbeat.start()
 #Start thread for writing out messages.
 outWriter = threading.Thread(target= QGCSend, args=(connectionList,),daemon=True)
 outWriter.start()
-#Start the message reader thread.
+#Start the MAVLINK message reader thread.
 messageReader = threading.Thread(target=mavlinkReader, args=(master,), daemon=True)
 messageReader.start()
 #Give the message reader time to start up before starting the writer thread.
 while gpsQueue.empty() or navQueue.empty(): 
     print("Waiting for GPS fix and NAV WP.")
-    time.sleep(1)
+    time.sleep(10)
 #Start the GPS writer thread.
 GPSWriter = threading.Thread(target=GPSWrite, daemon=True)
 GPSWriter.start()
@@ -162,6 +162,7 @@ try: #Main function, which is basically the winch loop:
             #Start profiling.
             #Send the profile command.
             print("On Station. Start Winch")
+            serWrite(serWinch,"") #Clear the line.
             serWrite(serWinch,"PROF") # Send Profile Command.
             try:
                 serReadLine(serWinch, 10) # Wait 10 seconds for response from winch
@@ -191,8 +192,8 @@ try: #Main function, which is basically the winch loop:
                     outQueue.put("Dock switch confirmed.")
                     #Wait until the waypoint is updated to break out of loop to avoid second profile.
                     currentSeq = missionSeqQueue.get().seq
-                    while(currentSeq==navQueue.get().seq): #Spin until mission item is incremented. #TODO: what happens at last waypoint? increment?
-                        print(f"Docked, waiting for mission sequence #{seq} to finish loiter.",currentSeq)
+                    while(currentSeq==missionSeqQueue.get().seq): #Spin until mission item is incremented. #TODO: what happens at last waypoint? increment?
+                        print(f"Docked, waiting for mission sequence #{currentSeq} to finish loiter.",currentSeq)
                         time.sleep(5)
                     break
                     
