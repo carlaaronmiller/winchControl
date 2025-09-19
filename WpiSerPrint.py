@@ -27,7 +27,7 @@ qgcZT = mavutil.mavlink_connection('udpout:192.168.192.96:14550',source_system=1
 connectionList = [qgc,qgcZT] 
 
 #Serial configurations.
-serSens = serial.Serial('/dev/ttyS0',115200,timeout=0.2)
+serSens = serial.Serial('/dev/ttyS0',115200,timeout=10)
 serWinch = serial.Serial('/dev/ttyAMA2',19200,timeout=0.2) # Serial port for the winch. Change this to the correct port.
 
 #Open the backup file for redundancy.
@@ -155,16 +155,15 @@ GPSWriter.start()
 
 try: #Main function, which is basically the winch loop:
     while(not winchFault):
-        
         #Check how far away from waypoint the boat is.
         wpDist = navQueue.get().wp_dist
-
+        print(f"Distance to waypoint: {wpDist}",wpDist) 
         if(wpDist<=wpThreshold): #If boat is inside wp radius.
             #Start profiling.
             #Send the profile command.
             print("On Station. Start Winch")
+            serWrite(serWinch,"PROF") # Send Profile Command.
             try:
-                serWrite(serWinch,"PROF") # Send Profile Command.
                 serReadLine(serWinch, 10) # Wait 10 seconds for response from winch
             except: # An error here indicates that the winch is not connected.
                 print("Error reading from winch serial port. Check connection.\n")
@@ -191,7 +190,7 @@ try: #Main function, which is basically the winch loop:
                 if "dock switch" in winchMsg:
                     outQueue.put("Dock switch confirmed.")
                     #Wait until the waypoint is updated to break out of loop to avoid second profile.
-                    currentSeq = navQueue.get().seq
+                    currentSeq = missionSeqQueue.get().seq
                     while(currentSeq==navQueue.get().seq): #Spin until mission item is incremented. #TODO: what happens at last waypoint? increment?
                         print(f"Docked, waiting for mission sequence #{seq} to finish loiter.",currentSeq)
                         time.sleep(5)
